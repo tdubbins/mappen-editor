@@ -16,6 +16,10 @@ Pictogramm-Suche: ARASAAC (https://arasaac.org)
   Autor: Sergio Palao, Eigentum der Regierung von Aragón (Spanien)
   Lizenz CC BY-NC-SA
 
+METACOM-Symbole (© Annette Kitzinger)
+  Sind NICHT im Editor enthalten. Sie kommen aus der eigenen, lizenzierten
+  METACOM-Sammlung auf dem Computer und werden nur dort gelesen.
+
 MIT-Lizenz (gilt für docx.js und die Trennmuster):
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

@@ -41,6 +41,10 @@
             <label>Text über der Linie
               <input type="text" id="besitzer" autocomplete="off">
             </label>
+            <label class="haken">
+              <input type="checkbox" id="metacom-hinweis">
+              Hinweis „METACOM Symbole © Annette Kitzinger“ unten auf jede Seite drucken
+            </label>
           </div>
         </div>
       </section>
@@ -49,6 +53,7 @@
         <div class="block-kopf">
           <h2>Karten <span class="zaehler" id="zaehler"></span></h2>
         </div>
+        <p class="hinweis">Bilder aus MetaSearch einfach auf eine Karte ziehen – oder in MetaSearch kopieren, ins Wortfeld klicken und ⌘V drücken.</p>
         <p class="hinweis">Silben werden automatisch erkannt. Stimmt eine Trennung nicht, das Wort mit Bindestrichen eintippen, z.&nbsp;B. <code>Fa-mi-li-e</code>.</p>
         <ol class="karten" id="karten"></ol>
         <button type="button" class="hinzufuegen" id="knopf-hinzufuegen">+ Karte hinzufügen</button>
@@ -77,13 +82,14 @@
         <input type="search" id="suche-text" placeholder="z. B. Oma, Hund, Apfel" autocomplete="off">
         <button type="submit">Suchen</button>
       </form>
+      <div class="metacom-leiste" id="metacom-leiste"></div>
       <div class="treffer" id="treffer"></div>
-      <p class="hinweis">Pictogramme von <a href="https://arasaac.org" target="_blank" rel="noopener">ARASAAC</a> (Sergio Palao, Regierung von Aragón), Lizenz CC BY-NC-SA. Für die Suche wird Internet gebraucht.</p>
+      <p class="hinweis">METACOM Symbole © Annette Kitzinger – aus dem eigenen Ordner auf diesem Computer, es wird nichts hochgeladen.<br>Pictogramme von <a href="https://arasaac.org" target="_blank" rel="noopener">ARASAAC</a> (Sergio Palao, Regierung von Aragón), Lizenz CC BY-NC-SA. Für die Suche wird Internet gebraucht.</p>
     </div>
     <div class="reiter-inhalt" data-inhalt="eigenes" hidden>
       <label class="ablage" id="ablage">
         <input type="file" id="bild-datei" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
-        <span>Bild hierher ziehen, mit ⌘V / Strg+V einfügen<br>oder <u>hier klicken</u> und eine Datei auswählen.</span>
+        <span>Bild hierher ziehen (z.&nbsp;B. aus MetaSearch), mit ⌘V / Strg+V einfügen<br>oder <u>hier klicken</u> und eine Datei auswählen.</span>
       </label>
     </div>
     <div class="dialog-fuss">
@@ -100,6 +106,7 @@
   <script src="vorlagen/berufe.js"></script>
   <script src="layout.js"></script>
   <script src="word-export.js"></script>
+  <script src="metacom.js"></script>
   <script src="editor.js"></script>
 </body>
 </html>

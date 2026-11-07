@@ -206,6 +206,22 @@ dialog::backdrop { background: rgba(20, 25, 35, .45); }
 .treffer button:hover { border-color: var(--akzent); }
 .treffer img { width: 100%; height: 100%; object-fit: contain; }
 .treffer .leer { grid-column: 1 / -1; color: var(--text-leise); }
+.treffer .abschnitt { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--text-leise); margin-top: 4px; }
+.treffer button.metacom { position: relative; }
+.treffer button.metacom span {
+  position: absolute; left: 4px; right: 4px; bottom: 3px;
+  font-size: 11px; color: var(--text-leise); background: rgba(255, 255, 255, .85);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.metacom-leiste {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 10px; padding: 8px 10px;
+  border-radius: 8px; background: var(--akzent-hell); font-size: 14px;
+}
+.metacom-leiste:empty { display: none; }
+.metacom-leiste button { font-size: 13px; padding: 4px 10px; }
+.karte.bild-ziel { outline: 2px dashed var(--akzent); outline-offset: 2px; background: var(--akzent-hell); }
+.bild-knopf.bild-ziel { outline: 2px dashed var(--akzent); outline-offset: 2px; }
 .ablage {
   display: grid;
   place-items: center;

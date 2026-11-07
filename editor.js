@@ -78,6 +78,7 @@
       titel: m.titel || "",
       titelBild: m.titelBild || null,
       besitzerText: m.besitzerText != null ? m.besitzerText : "Diese Mappe gehört:",
+      metacomHinweis: !!m.metacomHinweis,
       eintraege: (m.eintraege || []).map(function (e) {
         return {
           id: e.id || neueId(),
@@ -159,6 +160,7 @@
   function deckblattZeigen() {
     $("#titel").value = mappe.titel;
     $("#besitzer").value = mappe.besitzerText;
+    $("#metacom-hinweis").checked = mappe.metacomHinweis;
     bildKnopfSetzen($("#titel-bild"), mappe.titelBild);
     titelSilbenZeigen();
   }
@@ -334,6 +336,33 @@
       zielMarkierungWeg();
       ol.querySelectorAll(".zieht").forEach(function (x) { x.classList.remove("zieht"); });
     });
+
+    // Bilder von außen (z. B. aus MetaSearch) direkt auf eine Karte ziehen
+    function bildZielWeg() {
+      ol.querySelectorAll(".bild-ziel").forEach(function (x) { x.classList.remove("bild-ziel"); });
+    }
+    ol.addEventListener("dragover", function (ev) {
+      if (gezogen || !vonAussen(ev)) return;
+      var li = ev.target.closest(".karte");
+      if (!li) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "copy";
+      if (!li.classList.contains("bild-ziel")) {
+        bildZielWeg();
+        li.classList.add("bild-ziel");
+      }
+    });
+    ol.addEventListener("dragleave", function (ev) {
+      if (!ol.contains(ev.relatedTarget)) bildZielWeg();
+    });
+    ol.addEventListener("drop", function (ev) {
+      if (gezogen || !vonAussen(ev)) return;
+      var li = ev.target.closest(".karte");
+      bildZielWeg();
+      if (!li) return;
+      ev.preventDefault();
+      bildUebernehmen(bildAusUebergabe(ev.dataTransfer), li.dataset.id);
+    });
   }
 
   function karteHinzufuegen() {
@@ -351,20 +380,69 @@
 
   var bildZiel = null; // Karten-ID oder "titel"
 
-  function bildSetzen(src, quelle) {
-    if (bildZiel === "titel") {
+  function bildSetzen(src, quelle, ziel) {
+    if (ziel === undefined) ziel = bildZiel;
+    if (quelle === "metacom" && !mappe.metacomHinweis) {
+      mappe.metacomHinweis = true;
+      $("#metacom-hinweis").checked = true;
+    }
+    if (ziel === "titel") {
       mappe.titelBild = src;
       bildKnopfSetzen($("#titel-bild"), src);
     } else {
-      var e = eintragNach(bildZiel);
+      var e = eintragNach(ziel);
       if (!e) return;
       e.bild = src;
       e.bildQuelle = src ? quelle : null;
-      var li = document.querySelector('.karte[data-id="' + bildZiel + '"]');
+      var li = document.querySelector('.karte[data-id="' + ziel + '"]');
       if (li) bildKnopfSetzen(li.querySelector(".bild-knopf"), src);
     }
     geaendert();
-    $("#bild-dialog").close();
+    if ($("#bild-dialog").open) $("#bild-dialog").close();
+  }
+
+  // --- Bilder aus Ziehen & Ablegen oder Zwischenablage ---------------------
+
+  function vonAussen(ev) {
+    var typen = Array.from((ev.dataTransfer && ev.dataTransfer.types) || []);
+    return typen.indexOf("Files") >= 0 || typen.indexOf("text/uri-list") >= 0 || typen.indexOf("text/html") >= 0;
+  }
+
+  function istBildDatei(d) {
+    return d && /^image\//.test(d.type);
+  }
+
+  // Liest das Bild aus einem Ziehen/Ablegen. getData geht nur sofort im Ereignis.
+  function bildAusUebergabe(dt) {
+    var datei = Array.from(dt.files || []).find(istBildDatei);
+    if (datei) return Promise.resolve(datei);
+    var url = null;
+    var html = dt.getData("text/html");
+    var m = html && /<img[^>]+src\s*=\s*["']([^"']+)["']/i.exec(html);
+    if (m) url = m[1].replace(/&amp;/g, "&");
+    if (!url) {
+      url = (dt.getData("text/uri-list") || "").split(/\r?\n/).find(function (z) { return z && z.charAt(0) !== "#"; }) || null;
+    }
+    if (!url || /^file:/i.test(url)) return Promise.reject(new Error("kein Bild"));
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.blob();
+    }).then(function (b) {
+      if (!istBildDatei(b)) throw new Error("kein Bild");
+      return b;
+    });
+  }
+
+  function bildUebernehmen(versprechen, ziel) {
+    return versprechen
+      .then(bildVorbereiten)
+      .then(function (url) {
+        if (!url) throw new Error("Bild");
+        bildSetzen(url, "eigenes", ziel);
+      })
+      .catch(function () {
+        meldung("Das Bild konnte nicht übernommen werden. Tipp: in MetaSearch kopieren, ins Wortfeld klicken, ⌘V.");
+      });
   }
 
   function reiterZeigen(name) {
@@ -382,16 +460,119 @@
     $("#suche-text").value = suchwort || "";
     $("#treffer").textContent = "";
     reiterZeigen("suche");
+    letzterZustand = window.Metacom.zustand;
+    metacomLeisteZeigen();
     $("#bild-dialog").showModal();
+    // Der Klick aufs Bildfeld zählt als Erlaubnis-Klick für den gemerkten Ordner
+    if (window.Metacom.zustand === "freigabe") window.Metacom.freigeben();
     if (suchwort) suchen(suchwort);
     else $("#suche-text").focus();
+  }
+
+  // --- METACOM-Ordner ------------------------------------------------------
+
+  var metacomTreffer = [];
+  var metacomUrls = [];
+
+  function zahl(n) {
+    return n.toLocaleString("de-DE");
+  }
+
+  function metacomLeisteZeigen() {
+    var l = $("#metacom-leiste");
+    var M = window.Metacom;
+    var name = M.ordnerName ? "„" + M.ordnerName + "“" : "";
+    l.textContent = "";
+    function text(t) { var s = document.createElement("span"); s.textContent = t; l.appendChild(s); }
+    function knopf(t, aktion) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = t;
+      b.dataset.metacomAktion = aktion;
+      l.appendChild(b);
+    }
+    switch (M.zustand) {
+      case "bereit":
+        text("METACOM: " + zahl(M.anzahl) + " Symbole aus " + name);
+        knopf("Anderen Ordner wählen", "verbinden");
+        break;
+      case "liest":
+        text("METACOM-Ordner wird gelesen … " + zahl(M.anzahl) + " Symbole");
+        break;
+      case "freigabe":
+        text("METACOM-Ordner " + name + " ist gemerkt.");
+        knopf("Freigeben", "freigeben");
+        break;
+      case "fehler":
+        text("Im Ordner " + name + " wurden keine Bilder gefunden.");
+        knopf("Anderen Ordner wählen", "verbinden");
+        break;
+      default:
+        text(M.ordnerName && !M.kannMerken
+          ? "METACOM-Ordner " + name + " bitte noch einmal wählen:"
+          : "METACOM-Symbole hier mitsuchen:");
+        knopf("METACOM-Ordner wählen …", "verbinden");
+    }
+  }
+
+  var letzterZustand = null;
+  function metacomGeaendert() {
+    if (!$("#bild-dialog").open) return;
+    metacomLeisteZeigen();
+    var z = window.Metacom.zustand;
+    if (z === "bereit" && letzterZustand !== "bereit") {
+      var t = $("#suche-text").value.trim();
+      if (t) suchen(t);
+    }
+    letzterZustand = z;
+  }
+
+  function metacomTrefferZeigen(ziel, text) {
+    metacomUrls.forEach(function (u) { URL.revokeObjectURL(u); });
+    metacomUrls = [];
+    metacomTreffer = window.Metacom.suchen(text, 60);
+    if (window.Metacom.zustand !== "bereit") return;
+    var kopf = document.createElement("div");
+    kopf.className = "abschnitt";
+    kopf.textContent = metacomTreffer.length ? "METACOM" : "METACOM: nichts gefunden";
+    ziel.appendChild(kopf);
+    metacomTreffer.forEach(function (sym, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "metacom";
+      b.title = sym.pfad;
+      b.dataset.metacom = i;
+      var img = document.createElement("img");
+      img.alt = sym.name;
+      var unter = document.createElement("span");
+      unter.textContent = sym.name;
+      b.appendChild(img);
+      b.appendChild(unter);
+      ziel.appendChild(b);
+      sym.holen().then(function (d) {
+        var u = URL.createObjectURL(d);
+        metacomUrls.push(u);
+        img.src = u;
+      }).catch(function () { b.remove(); });
+    });
   }
 
   var sucheNr = 0;
   function suchen(text) {
     var nr = ++sucheNr;
     var ziel = $("#treffer");
-    ziel.innerHTML = '<div class="leer">Suche läuft …</div>';
+    ziel.textContent = "";
+    metacomTrefferZeigen(ziel, text);
+    if (window.Metacom.zustand === "bereit") {
+      var kopf = document.createElement("div");
+      kopf.className = "abschnitt";
+      kopf.textContent = "ARASAAC";
+      ziel.appendChild(kopf);
+    }
+    var status = document.createElement("div");
+    status.className = "leer";
+    status.textContent = "Suche läuft …";
+    ziel.appendChild(status);
     fetch("https://api.arasaac.org/v1/pictograms/de/search/" + encodeURIComponent(text.trim()))
       .then(function (r) {
         if (r.status === 404) return [];
@@ -400,11 +581,11 @@
       })
       .then(function (liste) {
         if (nr !== sucheNr) return;
-        ziel.textContent = "";
         if (!liste.length) {
-          ziel.innerHTML = '<div class="leer">Nichts gefunden. Anderes Wort versuchen (z. B. Einzahl: „Hund“ statt „Hunde“).</div>';
+          status.textContent = "Nichts gefunden. Anderes Wort versuchen (z. B. Einzahl: „Hund“ statt „Hunde“).";
           return;
         }
+        status.remove();
         liste.slice(0, 60).forEach(function (p) {
           var b = document.createElement("button");
           b.type = "button";
@@ -420,7 +601,7 @@
       })
       .catch(function () {
         if (nr !== sucheNr) return;
-        ziel.innerHTML = '<div class="leer">Keine Verbindung zu ARASAAC. Ist das Internet an? Alternativ unter „Eigenes Bild“ ein Bild einfügen.</div>';
+        status.textContent = "Keine Verbindung zu ARASAAC. Ist das Internet an? Alternativ unter „Eigenes Bild“ ein Bild einfügen.";
       });
   }
 
@@ -500,6 +681,23 @@
     });
 
     $("#treffer").addEventListener("click", function (ev) {
+      var mb = ev.target.closest("button[data-metacom]");
+      if (mb) {
+        var sym = metacomTreffer[+mb.dataset.metacom];
+        if (!sym) return;
+        mb.disabled = true;
+        sym.holen()
+          .then(bildVorbereiten)
+          .then(function (url) {
+            if (!url) throw new Error("Bild");
+            bildSetzen(url, "metacom");
+          })
+          .catch(function () {
+            mb.disabled = false;
+            meldung("Dieses Symbol konnte nicht gelesen werden.");
+          });
+        return;
+      }
       var b = ev.target.closest("button[data-id]");
       if (!b) return;
       var id = b.dataset.id;
@@ -516,6 +714,14 @@
           meldung("Das Bild konnte nicht geladen werden.");
         });
     });
+
+    $("#metacom-leiste").addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-metacom-aktion]");
+      if (!b) return;
+      if (b.dataset.metacomAktion === "freigeben") window.Metacom.freigeben();
+      else window.Metacom.verbinden();
+    });
+    window.Metacom.beobachten(metacomGeaendert);
 
     document.querySelectorAll(".dialog-reiter button").forEach(function (b) {
       b.addEventListener("click", function () { reiterZeigen(b.dataset.reiter); });
@@ -544,18 +750,38 @@
     ["dragleave", "drop"].forEach(function (t) {
       ablage.addEventListener(t, function () { ablage.classList.remove("drueber"); });
     });
-    ablage.addEventListener("drop", function (ev) {
+    var dialog = $("#bild-dialog");
+    dialog.addEventListener("dragover", function (ev) {
+      if (vonAussen(ev)) ev.preventDefault();
+    });
+    dialog.addEventListener("drop", function (ev) {
+      if (!vonAussen(ev)) return;
       ev.preventDefault();
-      dateiNehmen(ev.dataTransfer.files[0]);
+      bildUebernehmen(bildAusUebergabe(ev.dataTransfer));
     });
 
+    // Daneben fallen gelassene Bilder sollen nicht die Seite verlassen
+    document.addEventListener("dragover", function (ev) { if (vonAussen(ev)) ev.preventDefault(); });
+    document.addEventListener("drop", function (ev) { if (vonAussen(ev)) ev.preventDefault(); });
+
     document.addEventListener("paste", function (ev) {
-      if (!$("#bild-dialog").open) return;
-      var item = Array.from(ev.clipboardData.items || []).find(function (i) { return /^image\//.test(i.type); });
-      if (item) {
+      var items = Array.from(ev.clipboardData.items || []);
+      var item = items.find(function (i) { return /^image\//.test(i.type); });
+      if (!item) return;
+      if ($("#bild-dialog").open) {
         ev.preventDefault();
         dateiNehmen(item.getAsFile());
+        return;
       }
+      // Im Wortfeld einer Karte oder im Titel: Bild für diese Karte.
+      // Nur wenn kein Text dabei ist (Word legt zu kopiertem Text oft ein Bild dazu).
+      if (items.some(function (i) { return i.type === "text/plain"; })) return;
+      var feld = document.activeElement;
+      var li = feld && feld.closest && feld.closest(".karte");
+      var ziel = li ? li.dataset.id : (feld && feld.id === "titel" ? "titel" : null);
+      if (!ziel) return;
+      ev.preventDefault();
+      bildUebernehmen(Promise.resolve(item.getAsFile()), ziel);
     });
 
     $("#bild-entfernen").addEventListener("click", function () { bildSetzen(null, null); });
@@ -653,7 +879,25 @@
       mappe.besitzerText = ev.target.value;
       geaendert();
     });
-    $("#titel-bild").addEventListener("click", function () { bildDialogOeffnen("titel"); });
+    $("#metacom-hinweis").addEventListener("change", function (ev) {
+      mappe.metacomHinweis = ev.target.checked;
+      geaendert();
+    });
+    var titelBild = $("#titel-bild");
+    titelBild.addEventListener("click", function () { bildDialogOeffnen("titel"); });
+    titelBild.addEventListener("dragover", function (ev) {
+      if (!vonAussen(ev)) return;
+      ev.preventDefault();
+      titelBild.classList.add("bild-ziel");
+    });
+    titelBild.addEventListener("dragleave", function () { titelBild.classList.remove("bild-ziel"); });
+    titelBild.addEventListener("drop", function (ev) {
+      if (!vonAussen(ev)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      titelBild.classList.remove("bild-ziel");
+      bildUebernehmen(bildAusUebergabe(ev.dataTransfer), "titel");
+    });
     $("#knopf-hinzufuegen").addEventListener("click", karteHinzufuegen);
   }
 
@@ -667,6 +911,7 @@
       vorlagenMenue();
       speichernEinrichten();
       deckblattEinrichten();
+      window.Metacom.start();
       var start = gespeichert || (window.VORLAGEN && window.VORLAGEN[0] && kopie(window.VORLAGEN[0].mappe)) || {};
       mappe = normalisiere(start);
       deckblattZeigen();

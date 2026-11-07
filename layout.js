@@ -54,6 +54,9 @@
     breit: { x: 70.86, y: 75.47, b: 70.86, h: 106.66 },
   };
 
+  // unter der letzten Karte (endet bei 799 pt)
+  var NACHWEIS = { grundlinie: 822, groesse: 8, farbe: "#555555", metacom: "METACOM Symbole © Annette Kitzinger" };
+
   // ab dieser Breite des Punkt-Worts wird automatisch die breite Karte genommen
   var BREIT_AB = 294;
 
@@ -326,6 +329,20 @@
     return { art: "deckblatt", elemente: el };
   }
 
+  function bildnachweis(text) {
+    return {
+      art: "text",
+      rolle: "bildnachweis",
+      x: SEITE.b / 2,
+      anker: "mitte",
+      grundlinie: NACHWEIS.grundlinie,
+      groesse: NACHWEIS.groesse,
+      abstand: 0,
+      schrift: "normal",
+      teile: [{ text: text, farbe: NACHWEIS.farbe }],
+    };
+  }
+
   function seiten(mappe) {
     var liste = [deckblatt(mappe)];
     var e = mappe.eintraege || [];
@@ -335,6 +352,9 @@
         karte(el, eintrag, k);
       });
       liste.push({ art: "karten", elemente: el, ab: i });
+    }
+    if (mappe.metacomHinweis) {
+      liste.forEach(function (s) { s.elemente.push(bildnachweis(NACHWEIS.metacom)); });
     }
     return liste;
   }
