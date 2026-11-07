@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mappen-Editor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="leiste">
+    <div class="leiste-titel">Mappen-Editor</div>
+    <div class="leiste-knoepfe">
+      <div class="menue">
+        <button type="button" id="knopf-neu">Neue Mappe&nbsp;▾</button>
+        <div class="menue-liste" id="menue-neu" hidden>
+          <button type="button" data-aktion="leer">Leere Mappe</button>
+          <div class="menue-trenner">Vorlagen</div>
+          <div id="vorlagen-liste"></div>
+        </div>
+      </div>
+      <button type="button" id="knopf-oeffnen">Mappe öffnen…</button>
+      <button type="button" id="knopf-speichern">Mappe speichern</button>
+      <span class="leiste-abstand"></span>
+      <button type="button" id="knopf-word">Als Word herunterladen</button>
+      <button type="button" id="knopf-drucken" class="haupt">Drucken / als PDF</button>
+      <input type="file" id="datei-oeffnen" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <main class="arbeitsflaeche">
+    <aside class="eingabe" aria-label="Inhalt der Mappe">
+      <section class="block">
+        <h2>Deckblatt</h2>
+        <div class="deckblatt-zeile">
+          <button type="button" class="bild-knopf gross" id="titel-bild" title="Bild ändern"></button>
+          <div class="deckblatt-felder">
+            <label>Titel
+              <input type="text" id="titel" autocomplete="off" placeholder="z. B. Familie">
+            </label>
+            <div class="silben-vorschau" id="titel-silben"></div>
+            <label>Text über der Linie
+              <input type="text" id="besitzer" autocomplete="off">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block-kopf">
+          <h2>Karten <span class="zaehler" id="zaehler"></span></h2>
+        </div>
+        <p class="hinweis">Silben werden automatisch erkannt. Stimmt eine Trennung nicht, das Wort mit Bindestrichen eintippen, z.&nbsp;B. <code>Fa-mi-li-e</code>.</p>
+        <ol class="karten" id="karten"></ol>
+        <button type="button" class="hinzufuegen" id="knopf-hinzufuegen">+ Karte hinzufügen</button>
+      </section>
+
+      <section class="block klein">
+        <p class="hinweis" id="speicher-status">&nbsp;</p>
+        <p class="hinweis">Für Word einmalig die <a href="download/Schriften-fuer-Word.zip" download>Schriften herunterladen</a>, entpacken und jede Datei per Doppelklick installieren.</p>
+      </section>
+    </aside>
+
+    <section class="vorschau" id="vorschau" aria-label="Vorschau"></section>
+  </main>
+
+  <dialog id="bild-dialog">
+    <form method="dialog" class="dialog-kopf">
+      <h2>Bild auswählen</h2>
+      <button value="abbrechen" class="schliessen" aria-label="Schließen">×</button>
+    </form>
+    <div class="dialog-reiter">
+      <button type="button" data-reiter="suche" class="aktiv">Pictogramm suchen</button>
+      <button type="button" data-reiter="eigenes">Eigenes Bild</button>
+    </div>
+    <div class="reiter-inhalt" data-inhalt="suche">
+      <form class="suche" id="suche-form">
+        <input type="search" id="suche-text" placeholder="z. B. Oma, Hund, Apfel" autocomplete="off">
+        <button type="submit">Suchen</button>
+      </form>
+      <div class="treffer" id="treffer"></div>
+      <p class="hinweis">Pictogramme von <a href="https://arasaac.org" target="_blank" rel="noopener">ARASAAC</a> (Sergio Palao, Regierung von Aragón), Lizenz CC BY-NC-SA. Für die Suche wird Internet gebraucht.</p>
+    </div>
+    <div class="reiter-inhalt" data-inhalt="eigenes" hidden>
+      <label class="ablage" id="ablage">
+        <input type="file" id="bild-datei" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        <span>Bild hierher ziehen, mit ⌘V / Strg+V einfügen<br>oder <u>hier klicken</u> und eine Datei auswählen.</span>
+      </label>
+    </div>
+    <div class="dialog-fuss">
+      <button type="button" id="bild-entfernen">Bild entfernen</button>
+    </div>
+  </dialog>
+
+  <div class="meldung" id="meldung" role="status" hidden></div>
+
+  <script src="lib/schriften.js"></script>
+  <script src="lib/trennmuster-de.js"></script>
+  <script src="lib/silben.js"></script>
+  <script src="lib/docx.js"></script>
+  <script src="vorlagen/berufe.js"></script>
+  <script src="layout.js"></script>
+  <script src="word-export.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>
